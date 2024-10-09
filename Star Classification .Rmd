@@ -1,0 +1,400 @@
+---
+title: "DDA"
+author: ''
+date: "19/03/2022"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+
+```{r}
+library(ggplot2)
+library(plyr)
+library(tidyverse)
+library(epiDisplay)
+library(corrplot)
+library(cluster)
+library(ggfortify)
+
+```
+
+
+#1. Data Cleaning
+```{r}
+#Read the data from the file
+starDf<-read.csv("stellar_class.csv")
+
+#Inspect the dataset using the str and head function
+str(starDf)
+head(starDf,10)
+
+#Data Cleaning
+
+#1 Removal of ID columns
+star=subset(starDf,select=-c(run_ID,field_ID,spec_obj_ID,rerun_ID,fiber_ID,plate,cam_col,MJD))
+
+# Inspect dataset
+str(star)
+
+#Inspect the variables using summary and table
+summary(star[,-1])
+table(star$class)
+
+#2 Removal of outliers
+
+#finding the index of an outlier
+which(star$u==-9999)
+which(star$g==-9999)
+which(star$z==-9999)
+# it is the same row, so we need to drop the row
+star<-star[-c(79544),]
+
+#checking outliers for each column
+#alpha
+out <- boxplot.stats(star$alpha)$out
+out_ind <- which(star$alpha %in% c(out))
+out_ind
+
+#delta
+out <- boxplot.stats(star$delta)$out
+out_ind <- which(star$delta %in% c(out))
+out_ind
+
+#u
+out <- boxplot.stats(star$u)$out
+out_ind <- which(star$u %in% c(out))
+out_ind
+
+star<-star[-c(out_ind), ]
+
+#g
+out <- boxplot.stats(star$g)$out
+out_ind <- which(star$g %in% c(out))
+out_ind
+star<-star[-c(out_ind), ]
+
+#r
+out <- boxplot.stats(star$r)$out
+out_ind <- which(star$r %in% c(out))
+out_ind
+star<-star[-c(out_ind), ]
+
+#i
+out <- boxplot.stats(star$i)$out
+out_ind <- which(star$i %in% c(out))
+out_ind
+star<-star[-c(out_ind), ]
+
+#z
+out <- boxplot.stats(star$z)$out
+out_ind <- which(star$z %in% c(out))
+out_ind
+star<-star[-c(out_ind), ]
+
+
+#redshift
+out <- boxplot.stats(star$redshift)$out
+out_ind <- which(star$redshift %in% c(out))
+out_ind
+star<-star[-c(out_ind), ]
+
+
+nrow(star)
+
+#3 Check for NAs or blanks
+paste("The number of missing values is:",sum(is.null(star))) #no nulls
+paste("The number of NA values is:",sum(is.na(star))) #no NAs
+
+#4 Check for duplicated rows
+paste("The number of duplicated values is:",sum(duplicated(star)))#no duplications
+
+
+#5 renaming the columns in the dataset
+names(star) <- c('object_ID', 'ascension_angle', 'declination_angle', 'uv_filter', 'green_filter', 'red_filter',
+                 'near_infared_filter', 'infared_filter', 'class', 'redshift')
+
+#6 changing class variable to factor
+star$class<-as.factor(star$class)
+
+#Inspect the dataset
+str(star)
+```
+
+#2 EDA Section
+
+#2.1 UniVariate Visualization
+```{r}
+#Histogram for Right Ascension Angle
+hist(star$ascension_angle,xlab="Right Ascension Angle",ylab="Frequency of Right Ascension Angle",main="Histogram for Right Ascension Angle",col = rgb(0, 0.5, 1),border = 'white',xaxt = 'n')
+axis(1)
+abline(v = median(star$ascension_angle), lty = 2)
+legend('topright', 'Median Ascension Angle', lty = 2, bty = 'n')
+
+
+#Histogram for Declination angle
+hist(star$declination_angle,xlab="Declination angle",ylab="Frequency of Declination angle",main="Histogram for Declination angle",col = rgb(0, 0.5, 1),border = 'white',xaxt = 'n')
+axis(1)
+abline(v = median(star$declination_angle), lty = 2)
+legend('topright', 'Median Declination Angle', lty = 2, bty = 'n')
+
+#Histogram for Ultraviolet Filter
+hist(star$uv_filter,xlab="Ultraviolet filter",ylab="Frequency of Ultraviolet filter",main="Histogram of Ultraviolet filter in the photometric system",col = rgb(0, 0.5, 1),border = 'white',xaxt = 'n')
+axis(1)
+abline(v = median(star$uv_filter), lty = 2)
+legend('topright', 'Median Ultraviolet filter', lty = 2, bty = 'n')
+
+#Histogram for Green Filter
+hist(star$green_filter,xlab="Green filter",ylab="Frequency of Green filter",main="Histogram of Green filter in the photometric system",col = rgb(0, 0.5, 1),border = 'white',xaxt = 'n')
+axis(1)
+abline(v = median(star$green_filter), lty = 2)
+legend('topright', 'Median Green filter', lty = 2, bty = 'n')
+
+#Histogram for Red Filter
+hist(star$red_filter,xlab="Red filter",ylab="Frequency of Red filter",main="Histogram of Red filter in the photometric system",col = rgb(0, 0.5, 1),border = 'white',xaxt = 'n')
+axis(1)
+abline(v = median(star$red_filter), lty = 2)
+legend('topright', 'Median Red filter', lty = 2, bty = 'n')
+
+
+#Histogram for Near Infrared Filter
+hist(star$near_infared_filter,xlab="Near Infrared filter",ylab="Frequency of Near Infrared filter",main="Histogram of Near Infrared filter in the photometric system",col = rgb(0, 0.5, 1),border = 'white',xaxt = 'n')
+axis(1)
+abline(v = median(star$near_infared_filter), lty = 2)
+legend('topright', 'Median Near Infrared filter', lty = 2, bty = 'n')
+
+#Histogram for Infrared Filter
+hist(star$infared_filter,xlab="Infrared filter",ylab="Frequency of Infrared filter",main="Histogram of Infrared filter in the photometric system",col = rgb(0, 0.5, 1),border = 'white',xaxt = 'n')
+axis(1)
+abline(v = median(star$infared_filter), lty = 2)
+legend('topright', 'Median Infrared filter', lty = 2, bty = 'n')
+
+#Histogram for Redshift Value
+hist(star$redshift,xlab="Redshift Value",ylab="Frequency of Reshift Value",main="Histogram of redshift value based on the increase in wavelength",col = rgb(0, 0.5, 1),border = 'white',xaxt = 'n')
+axis(1)
+abline(v = median(star$redshift), lty = 2)
+legend('topright', 'Median Redshift Value', lty = 2, bty = 'n')
+
+#Visualize the class by using tab from the epidisplay library(ProgrammingR,2021)
+tab1(star$class, sort.group = "decreasing", cum.percent = TRUE,main="Distribution of Stellar Objects",xlab = "Stellar Objects",col=rgb(0, 0.5, 1))
+```
+
+#2.2 Multivariate Visualization
+```{r}
+#Box plot for Right Ascension Angle and class
+ggplot(star,aes(x=class,y=ascension_angle,fill=class))+geom_boxplot()+theme_bw()+ggtitle("Right Ascension Angle vs class in stellar classification") +xlab("Stellar Class") + ylab("Stellar Right Acension Angle")
+```
+
+#2.3 Correlation Matrix
+```{r}
+#Creating new Dataframe to check for correlation
+correlationStar<-subset(star,select=-c(object_ID,class))
+
+#Adding a new column which is equivalent to class only for correlation purposes
+correlationStar$class_new<-ifelse(star$class=="GALAXY","1","0")
+
+#Changing to numeric as correlation requires the variables to be numeric
+correlationStar$class_new<-as.numeric(correlationStar$class_new)
+
+#Checking using tabke if both the class values for GALAXY and STAR are present
+table(correlationStar$class_new)
+
+#Use cor to give the numerical corelations between the variables
+cor(correlationStar)
+
+# Use corrplot to give a visual representation of the co-relation matrix(RDocumentation,2021)
+corrplot(cor(correlationStar))
+
+```
+
+#2.4 PCA
+```{r}
+#Perform PCA on the stellar classification dataset
+starPCA<-prcomp(star[,c(-9,-1)],center = T,scale. = T)
+
+# inspect the PCA object starPCA attributes
+attributes(starPCA)
+summary(starPCA)
+
+
+#Calculation of the propotion of explained variance(PEV) and creating a dataframe from it
+var_stellar_df <- data.frame(PCA= paste0("PCA",1:8),                var_stellar_explained=(starPCA$sdev)^2/sum((starPCA$sdev)^2))
+
+#inspect the dataframe created.Head function return first 6 rows.
+head(var_stellar_df)
+
+
+#scree plot
+var_stellar_df %>%
+  ggplot(aes(x=PCA,y=var_stellar_explained, group=1))+
+  geom_point(size=4)+
+  geom_line()+
+  labs(title="Scree plot: PCA on scaled data")
+
+#plot the variance per PC in bars
+plot(starPCA)
+
+#plot the cumulative value of PEV for PC components and draw a line at 80% threshold
+#From the summary and the plot first 3 pcs should be selected
+plot(
+  cumsum(var_stellar_explained),
+  ylim = c(0,1),
+  xlab = 'PC',
+  ylab = 'cumulative PEV',
+  pch = 20,
+  col = 'orange'
+)
+abline(h = 0.8, col = 'red', lty = 'dashed')
+
+# get and inspect the loadings for each PC
+pc_stellar_loadings <- starPCA$rotation
+pc_stellar_loadings
+
+# ploting the loadings for the first three components as a barplot
+opar <- par(no.readonly = TRUE)
+colvector = c('red', 'orange', 'yellow', 'green', 'cyan', 'blue','grey','black')
+labvector = c('PC1', 'PC2', 'PC3')
+barplot(
+  pc_stellar_loadings[,c(1:3)],
+  beside = T,
+  yaxt = 'n',
+  names.arg = labvector,
+  col = colvector,
+  ylim = c(-1,1),
+  border = 'white',
+  ylab = 'loadings'
+)
+axis(2, seq(-1,1,0.1))
+legend(
+  'topright',
+  bty = 'n',
+  col = colvector,
+  pch = 15,
+  cex=0.5,
+  row.names(pc_stellar_loadings)
+)
+par(opar)
+
+#generating biplot using autoplot with values cololured using the target variable
+opar <- par(no.readonly = TRUE)
+par(mfrow = c(2,2))
+autoplot(starPCA, data = star, colour = 'class',loadings=TRUE, loadings.colour = 'blue',loadings.label = TRUE,
+loadings.label.size = 3,scale =0)
+autoplot(starPCA, data = star, colour = 'class',loadings=TRUE, loadings.colour = 'blue',loadings.label = TRUE,
+loadings.label.size = 3,scale =0,x=1,y=3)
+autoplot(starPCA, data = star, colour = 'class',loadings=TRUE, loadings.colour = 'blue',loadings.label = TRUE,
+loadings.label.size = 3,scale =0,x=2,y=3)
+par(opar)
+
+```
+
+
+#3. Applying KNN
+
+```{r}
+#importing class library
+library(class)
+star2<-star[,c(9,1,2,3,4,5,6,7,8,10)]
+View(star2)
+View(star)
+#Seting random seed to 3000
+set.seed(3000)
+
+#3.2 Splitting the data
+n_rows <- nrow(star2)
+#Splitting data into test and train data
+training_ind <- sample(n_rows, n_rows * 0.7)
+training_star <- star2[training_ind,] #70% train data
+test_star<- star2[-training_ind,] #30% test  data
+
+#3.3 Data Normalization
+str(star2)
+minmax <- function(x){
+  tx <- (x - min(x)) / (max(x) - min(x))
+  return(tx)
+}
+#Applying normalization to all variables except the target one
+star_minmax <- apply(star2[,-1], 2, minmax)
+str(star_minmax)
+View(star_minmax)
+training_star_data_minmax <- star_minmax[training_ind,]
+test_star_data_minmax <- star_minmax[-training_ind,]
+
+
+### 3.4 compute the prediction for the test set using kNN
+k_value = sqrt(length(training_ind))
+knn_star_class_pred <- knn(train = training_star_data_minmax, test = test_star_data_minmax, cl = training_star[,1], k_value,prob=TRUE)
+
+
+
+### 3.5 create a table with actual and predicted values
+star_data_results <- data.frame(
+  actual = test_star$class,
+  knn = knn_star_class_pred
+)
+
+### 3.6 create a contingency table of the actual VS predicted for kNN
+knn_results <- table(star_data_results[,c('actual','knn')])
+View(knn_results)
+View(star_data_results)
+### 3.7 calculate accuracy values from the contingency tables
+
+acc_knn <- 100*(sum(diag(knn_results)) / sum(knn_results))
+acc_knn
+1-(sum(diag(knn_results)) / sum(knn_results))
+
+#Model Performance evaluation
+library(ROCR)
+library(caret)
+library(AUC)
+cm<-confusionMatrix(data=star_data_results$knn,reference=star_data_results$actual, positive="2")
+cm
+library(ggplot2)
+ggplot(data =  star_data_results, mapping = aes(x = knn, y = actual)) +
+  scale_fill_gradient(low = "blue", high = "red") +
+  theme_bw() + theme(legend.position = "none")
+# Summary of model
+library(ISLR)
+library(ggplot2)
+
+
+
+
+
+
+ctrl <- trainControl(method="repeatedcv",repeats = 3,classProbs=TRUE,summaryFunction = multiClassSummary)
+knnFit <- train(class ~ ., data = training_star, method = "knn", trControl = ctrl, preProcess = c("center","scale"))
+modelknnR <- train(class~., data=training_star,
+                method = "knn",
+                tuneGrid = expand.grid(k=1:60))
+knnFit
+str(star2)
+ctrl
+galaxy_ROC_pred
+plot(knnFit)
+
+#creating a new dataframe for the ROC curve
+df<-as.data.frame(star_data_results$actual)
+df<-df%>%add_column(GALAXY=if_else(.$`star_data_results$actual`=='GALAXY',TRUE,FALSE))
+df<-df%>%add_column(QSO=if_else(.$`star_data_results$actual`=='QSO',TRUE,FALSE))
+df<-df%>%add_column(STAR=if_else(.$`star_data_results$actual`=='STAR',TRUE,FALSE))
+label<- subset(df,select=-c(`star_data_results$actual`))
+View(label)
+X <- split(df, df$`star_data_results$actual`)
+str(X)
+X <- data.frame(matrix(unlist(X), nrow=length(X)))
+#plotting the ROC curve
+library(pROC)
+plot(knnFit, print.thres = 0.5, type="S")
+valid_pred <- predict(knnFit,training_star, type = "prob")
+View(valid_pred)
+pred_val <-prediction(valid_pred,training_star$actual)
+multiclass.roc(star_data_results$actual,star_data_results$knn)
+View(training_star)
+```
